@@ -20,7 +20,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
 
-    // 1. معالج اختيار الملفات (الصور/الفيديو)
     private val fileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             fileUploadCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data))
@@ -30,7 +29,6 @@ class MainActivity : AppCompatActivity() {
         fileUploadCallback = null
     }
 
-    // 2. معالج أذونات الميكروفون
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) webView.reload()
     }
@@ -54,20 +52,24 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
         val settings = webView.settings
         
-        // --- إصلاح العرض الضخم (Scale Fix) ---
+        // --- إصلاح الشاشة الكبيرة (إجبار التصغير) ---
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
-        settings.setSupportZoom(false)
+        settings.setSupportZoom(true) // تفعيل الزوم برمجياً ليتمكن النظام من التصغير
+        settings.builtInZoomControls = false
         
-        // جعل المتصفح يظن أنه "كروم" على هاتف بكسل (لضبط الأبعاد)
-        settings.userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
+        // السطر الأهم: ضبط كثافة العرض لتناسب الموبايل
+        settings.defaultTextEncodingName = "utf-8"
+        webView.setInitialScale(1) // البدء بأصغر مقياس ممكن
 
-        // --- إعدادات الميكروفون والملفات ---
-        settings.allowFileAccess = true
-        settings.allowContentAccess = true
+        // محاكاة متصفح Chrome الرسمي بدقة
+        settings.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+
+        // --- إعدادات الميكروفون ---
         settings.mediaPlaybackRequiresUserGesture = false
+        settings.allowFileAccess = true
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -75,8 +77,14 @@ class MainActivity : AppCompatActivity() {
             }
             override fun onPageFinished(view: WebView?, url: String?) {
                 progressBar.visibility = View.GONE
-                // إجبار الموقع على عرض الموبايل عبر JS إذا فشل الـ Viewport
-                view?.evaluateJavascript("document.querySelector('meta[name=\"viewport\"]').setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');", null)
+                // إجبار الموقع عبر JavaScript على الانكماش ليناسب عرض الشاشة
+                view?.evaluateJavascript("""
+                    var meta = document.createElement('meta');
+                    meta.name = 'viewport';
+                    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+                    document.getElementsByTagName('head')[0].appendChild(meta);
+                    document.body.style.zoom = (window.innerWidth / document.documentElement.clientWidth);
+                """.trimIndent(), null)
             }
         }
 
@@ -85,7 +93,6 @@ class MainActivity : AppCompatActivity() {
                 progressBar.progress = newProgress
             }
 
-            // --- حل مشكلة رفع الصور ---
             override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
                 fileUploadCallback = filePathCallback
                 val intent = fileChooserParams?.createIntent()
@@ -93,14 +100,10 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
-            // --- حل مشكلة الميكروفون ---
             override fun onPermissionRequest(request: PermissionRequest) {
-                if (request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
-                    if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                        requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    } else {
-                        runOnUiThread { request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) }
-                    }
+                // منح الإذن فوراً لجميع الموارد المطلوبة (ميكروفون وصوت)
+                runOnUiThread {
+                    request.grant(request.resources)
                 }
             }
         }
