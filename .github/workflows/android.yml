@@ -18,11 +18,16 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # تم حذف خطوة chmod لأننا لن نستخدم gradlew
-    
+    # هذه الخطوة ستقوم بتثبيت Gradle Wrapper بإصدار مستقر متوافق (8.5)
+    - name: Setup Gradle
+      run: gradle wrapper --gradle-version 8.5
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    # الآن نستخدم gradlew الذي قمنا بتوليده لضمان التوافق
     - name: Build with Gradle
-      # تم تغيير الأمر ليستخدم gradle المثبت في النظام مباشرة
-      run: gradle assembleRelease
+      run: ./gradlew assembleRelease
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
