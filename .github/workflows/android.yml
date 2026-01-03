@@ -9,10 +9,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # تم التحديث إلى v4
     - uses: actions/checkout@v4
     
-    # تم التحديث إلى v4
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -20,13 +18,12 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-
+    # تم حذف خطوة chmod لأننا لن نستخدم gradlew
+    
     - name: Build with Gradle
-      run: ./gradlew assembleRelease
+      # تم تغيير الأمر ليستخدم gradle المثبت في النظام مباشرة
+      run: gradle assembleRelease
 
-    # هذا هو سبب الخطأ، تم تحديثه إلى v4
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
