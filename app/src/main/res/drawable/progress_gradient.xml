@@ -1,17 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@android:id/background">
-        <shape>
-            <solid android:color="#E0E0E0"/>
-        </shape>
+        <shape><solid android:color="@android:color/transparent"/></shape>
     </item>
     <item android:id="@android:id/progress">
         <clip>
             <shape>
                 <gradient
-                    android:startColor="#000000"
-                    android:centerColor="#808080"
-                    android:endColor="#FFFFFF"
+                    android:startColor="#FFFFFF"
+                    android:endColor="#007BFF"
                     android:angle="0"/>
             </shape>
         </clip>
