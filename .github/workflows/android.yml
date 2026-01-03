@@ -12,20 +12,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # هذه الخطوة تجبر GitHub على استخدام الإصدار 8.0 المستقر
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-        # تم حذف تحديد الإصدار اليدوي ليقوم GitHub باختيار الأنسب تلقائياً
+        with:
+          gradle-version: '8.0'
 
       - name: Build with Gradle
         run: |
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.0
-          fi
+          gradle wrapper --gradle-version 8.0
           chmod +x gradlew
           ./gradlew assembleRelease
         
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Aite-Native-Success
+          name: Aite-Native-V1
           path: app/build/outputs/apk/release/*.apk
