@@ -11,15 +11,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # تثبيت إصدار محدد من Gradle لتجنب أخطاء الإصدارات الحديثة
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
         with:
-          gradle-version: 8.0
+          gradle-version: '8.0' # تم التعديل هنا ليكون دقيقاً
 
       - name: Build with Gradle
-        run: gradle assembleRelease
-
+        run: gradle assembleRelease --stacktrace
+        
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
