@@ -2,8 +2,10 @@ package com.aite.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.webkit.*
@@ -16,14 +18,21 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
+    private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
 
-    // معالج أذونات النظام للميكروفون
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            webView.reload() // إعادة تحميل لتنشيط الميكروفون بعد الموافقة
+    // 1. معالج اختيار الملفات (الصور/الفيديو)
+    private val fileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            fileUploadCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data))
+        } else {
+            fileUploadCallback?.onReceiveValue(null)
         }
+        fileUploadCallback = null
+    }
+
+    // 2. معالج أذونات الميكروفون
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) webView.reload()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -36,7 +45,6 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
         
-        // حفظ جلسة الدخول (الكوكيز)
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
         
@@ -46,28 +54,29 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
         val settings = webView.settings
         
-        // --- الحل النهائي لمشكلة العرض الواسع في Oppo ---
+        // --- إصلاح العرض الضخم (Scale Fix) ---
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
-        settings.useWideViewPort = true 
+        settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
         settings.setSupportZoom(false)
         
-        // السطر التالي هو السر في جعل العرض ملائماً وصغيراً كالمتصفح
-        webView.setInitialScale(1) // يجعل الموقع يبدأ بأصغر حجم ممكن ليلائم الشاشة
+        // جعل المتصفح يظن أنه "كروم" على هاتف بكسل (لضبط الأبعاد)
+        settings.userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
 
-        // --- إعدادات الميكروفون والصوت ---
+        // --- إعدادات الميكروفون والملفات ---
+        settings.allowFileAccess = true
+        settings.allowContentAccess = true
         settings.mediaPlaybackRequiresUserGesture = false
-        settings.databaseEnabled = true
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 progressBar.visibility = View.VISIBLE
             }
-
             override fun onPageFinished(view: WebView?, url: String?) {
                 progressBar.visibility = View.GONE
-                CookieManager.getInstance().flush()
+                // إجبار الموقع على عرض الموبايل عبر JS إذا فشل الـ Viewport
+                view?.evaluateJavascript("document.querySelector('meta[name=\"viewport\"]').setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');", null)
             }
         }
 
@@ -76,19 +85,21 @@ class MainActivity : AppCompatActivity() {
                 progressBar.progress = newProgress
             }
 
-            // تفعيل الميكروفون برمجياً داخل WebView
+            // --- حل مشكلة رفع الصور ---
+            override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
+                fileUploadCallback = filePathCallback
+                val intent = fileChooserParams?.createIntent()
+                fileChooserLauncher.launch(intent)
+                return true
+            }
+
+            // --- حل مشكلة الميكروفون ---
             override fun onPermissionRequest(request: PermissionRequest) {
-                val resources = request.resources
-                if (resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
-                    // التحقق من إذن النظام أولاً
-                    if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) 
-                        != PackageManager.PERMISSION_GRANTED) {
+                if (request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                    if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                         requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     } else {
-                        // منح الإذن فوراً إذا كان إذن النظام موجوداً
-                        runOnUiThread {
-                            request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
-                        }
+                        runOnUiThread { request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) }
                     }
                 }
             }
