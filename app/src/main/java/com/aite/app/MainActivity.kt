@@ -17,9 +17,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
 
+    // طلب الإذن فقط عند الحاجة (تمت إزالة الطلب التلقائي من هنا)
     private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ -> }
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            webView.reload() // إعادة التحميل لتفعيل الميكروفون بعد الموافقة
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,24 +35,31 @@ class MainActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.progressBar)
 
         setupWebView()
+        
+        // --- إصلاح حفظ تسجيل الدخول (الجلسة) ---
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+        
         webView.loadUrl("https://aite-lite.vercel.app")
     }
 
     private fun setupWebView() {
         val settings = webView.settings
         
-        // --- إعدادات الحجم والملاءمة ---
+        // --- إعدادات العرض (الحجم الطبيعي) ---
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
+        settings.databaseEnabled = true
         settings.useWideViewPort = true 
         settings.loadWithOverviewMode = true
         settings.setSupportZoom(false)
-        settings.displayZoomControls = false
+        
+        // --- تسريع الأداء ---
+        settings.cacheMode = WebSettings.LOAD_DEFAULT
+        settings.setRenderPriority(WebSettings.RenderPriority.HIGH)
 
-        // --- إصلاح الميكروفون والصوت ---
+        // --- إعدادات الميكروفون ---
         settings.mediaPlaybackRequiresUserGesture = false
-        settings.allowFileAccess = true
-        settings.allowContentAccess = true
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -56,11 +68,8 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 progressBar.visibility = View.GONE
-                // منع تحديد النص والنسخ عبر CSS
-                view?.evaluateJavascript(
-                    "document.documentElement.style.webkitUserSelect='none'; " +
-                    "document.documentElement.style.webkitTouchCallout='none';", null
-                )
+                // حفظ الكوكيز فور انتهاء التحميل لضمان عدم الخروج
+                CookieManager.getInstance().flush()
             }
         }
 
@@ -69,23 +78,21 @@ class MainActivity : AppCompatActivity() {
                 progressBar.progress = newProgress
             }
 
-            // منح الإذن الفني للميكروفون داخل الـ WebView
+            // هذا الجزء يمنح الإذن للموقع للوصول للميكروفون برمجياً
             override fun onPermissionRequest(request: PermissionRequest) {
-                val requestedResources = request.resources
-                for (resource in requestedResources) {
-                    if (resource == PermissionRequest.RESOURCE_AUDIO_CAPTURE) {
-                        request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
-                        return
+                runOnUiThread {
+                    val resources = request.resources
+                    if (resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                        // إذا كان إذن النظام مفقوداً، نطلبه هنا
+                        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) 
+                            != PackageManager.PERMISSION_GRANTED) {
+                            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        } else {
+                            request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                        }
                     }
                 }
-                super.onPermissionRequest(request)
             }
-        }
-
-        // طلب إذن الميكروفون من النظام فوراً عند الحاجة
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) 
-            != PackageManager.PERMISSION_GRANTED) {
-            requestPermissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
         }
     }
 
