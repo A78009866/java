@@ -17,12 +17,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
 
-    // طلب الإذن فقط عند الحاجة (تمت إزالة الطلب التلقائي من هنا)
+    // معالج أذونات النظام للميكروفون
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            webView.reload() // إعادة التحميل لتفعيل الميكروفون بعد الموافقة
+            webView.reload() // إعادة تحميل لتنشيط الميكروفون بعد الموافقة
         }
     }
 
@@ -36,7 +36,7 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
         
-        // --- إصلاح حفظ تسجيل الدخول (الجلسة) ---
+        // حفظ جلسة الدخول (الكوكيز)
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
         
@@ -46,20 +46,19 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
         val settings = webView.settings
         
-        // --- إعدادات العرض (الحجم الطبيعي) ---
+        // --- الحل النهائي لمشكلة العرض الواسع في Oppo ---
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
-        settings.databaseEnabled = true
         settings.useWideViewPort = true 
         settings.loadWithOverviewMode = true
         settings.setSupportZoom(false)
         
-        // --- تسريع الأداء ---
-        settings.cacheMode = WebSettings.LOAD_DEFAULT
-        settings.setRenderPriority(WebSettings.RenderPriority.HIGH)
+        // السطر التالي هو السر في جعل العرض ملائماً وصغيراً كالمتصفح
+        webView.setInitialScale(1) // يجعل الموقع يبدأ بأصغر حجم ممكن ليلائم الشاشة
 
-        // --- إعدادات الميكروفون ---
+        // --- إعدادات الميكروفون والصوت ---
         settings.mediaPlaybackRequiresUserGesture = false
+        settings.databaseEnabled = true
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -68,7 +67,6 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 progressBar.visibility = View.GONE
-                // حفظ الكوكيز فور انتهاء التحميل لضمان عدم الخروج
                 CookieManager.getInstance().flush()
             }
         }
@@ -78,16 +76,17 @@ class MainActivity : AppCompatActivity() {
                 progressBar.progress = newProgress
             }
 
-            // هذا الجزء يمنح الإذن للموقع للوصول للميكروفون برمجياً
+            // تفعيل الميكروفون برمجياً داخل WebView
             override fun onPermissionRequest(request: PermissionRequest) {
-                runOnUiThread {
-                    val resources = request.resources
-                    if (resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
-                        // إذا كان إذن النظام مفقوداً، نطلبه هنا
-                        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) 
-                            != PackageManager.PERMISSION_GRANTED) {
-                            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        } else {
+                val resources = request.resources
+                if (resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                    // التحقق من إذن النظام أولاً
+                    if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) 
+                        != PackageManager.PERMISSION_GRANTED) {
+                        requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    } else {
+                        // منح الإذن فوراً إذا كان إذن النظام موجوداً
+                        runOnUiThread {
                             request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
                         }
                     }
