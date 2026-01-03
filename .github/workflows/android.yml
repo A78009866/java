@@ -11,16 +11,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # تثبيت أداة Gradle بشكل مستقل لضمان العمل
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.0' # تم التعديل هنا ليكون دقيقاً
+          gradle-version: 8.0
 
+      # بناء التطبيق مع تجاهل الملفات المفقودة وتوليدها تلقائياً
       - name: Build with Gradle
-        run: gradle assembleRelease --stacktrace
-        
+        run: |
+          gradle wrapper
+          ./gradlew assembleRelease --stacktrace
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Aite-Native-Final
+          name: Aite-Final-App
           path: app/build/outputs/apk/release/*.apk
