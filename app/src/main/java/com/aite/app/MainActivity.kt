@@ -74,7 +74,7 @@ class MainActivity : AppCompatActivity() {
         })
 
         // رابط موقعك
-        webView.loadUrl("https://aite.app") // استبدل هذا برابط موقعك الحقيقي
+        webView.loadUrl("https://aite-lite.vercel.app") // استبدل هذا برابط موقعك الحقيقي
     }
 
     @SuppressLint("SetJavaScriptEnabled")
