@@ -10,24 +10,22 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
 
-    # هذه الخطوة ستقوم بتثبيت Gradle Wrapper بإصدار مستقر متوافق (8.5)
+    # استخدام الأداة الرسمية لإعداد Gradle بالإصدار المناسب لمشروعك
     - name: Setup Gradle
-      run: gradle wrapper --gradle-version 8.5
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: 8.5 # نجبره على استخدام إصدار مستقر ومتوافق
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-
-    # الآن نستخدم gradlew الذي قمنا بتوليده لضمان التوافق
+    # بناء التطبيق مباشرة باستخدام الأداة المثبتة
     - name: Build with Gradle
-      run: ./gradlew assembleRelease
+      run: gradle assembleRelease
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
