@@ -17,18 +17,19 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # استخدام الأداة الرسمية لإعداد Gradle بالإصدار المناسب لمشروعك
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: 8.5 # نجبره على استخدام إصدار مستقر ومتوافق
+        gradle-version: 8.5
 
-    # بناء التطبيق مباشرة باستخدام الأداة المثبتة
+    # قمنا بتغيير assembleRelease إلى assembleDebug
+    # هذا يجعله يولد ملف APK موقّع تلقائياً وصالح للتثبيت الفوري
     - name: Build with Gradle
-      run: gradle assembleRelease
+      run: gradle assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: Aite-release
-        path: app/build/outputs/apk/release/app-release-unsigned.apk
+        name: Aite-Debug
+        # تأكد من تغيير المسار ليقرأ من مجلد debug
+        path: app/build/outputs/apk/debug/app-debug.apk
