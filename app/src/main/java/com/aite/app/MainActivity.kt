@@ -73,6 +73,17 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+        // التحقق من وجود رابط قادم من الإشعار
+    val urlFromNotif = intent.getStringExtra("target_url")
+    if (!urlFromNotif.isNullOrEmpty()) {
+        // إذا كنت تستخدم WebView، افتح الرابط فيه:
+         myWebView.loadUrl(urlFromNotif)
+        
+        // أو افتحه في متصفح خارجي:
+        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(urlFromNotif))
+        startActivity(browserIntent)
+    }
+}
 
         // رابط موقعك
         webView.loadUrl("https://aite-lite.vercel.app") 
