@@ -1,44 +1,32 @@
-package com.example.aite
+package com.aite.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlin.random.Random
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
-    // يتم استدعاؤها عندما يحصل الجهاز على توكن جديد (عنوان الجهاز)
-    override fun onNewToken(token: String) {
-        super.onNewToken(token)
-        val userId = FirebaseAuth.getInstance().currentUser?.uid
-        if (userId != null) {
-            // حفظ التوكن في قاعدة البيانات ليعرف السيرفر أين يرسل
-            FirebaseDatabase.getInstance().getReference("users")
-                .child(userId).child("fcmToken").setValue(token)
-        }
-    }
-
-    // يتم استدعاؤها عند وصول إشعار والتطبيق في الخلفية أو مغلق
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        val title = remoteMessage.notification?.title ?: "إشعار جديد"
-        val body = remoteMessage.notification?.body ?: ""
-        val url = remoteMessage.data["url"] // الرابط الذي أرسله السيرفر
+        // استلام البيانات من السيرفر
+        val title = remoteMessage.data["title"] ?: remoteMessage.notification?.title ?: "إشعار جديد"
+        val body = remoteMessage.data["body"] ?: remoteMessage.notification?.body ?: ""
+        val targetUrl = remoteMessage.data["url"] // الرابط الذي نريد التوجيه إليه
 
-        showNotification(title, body, url)
+        showNotification(title, body, targetUrl)
     }
 
     private fun showNotification(title: String, body: String, url: String?) {
         val intent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra("target_url", url) // نضع الرابط هنا لفتحه لاحقاً
+            // نمرر الرابط للـ MainActivity
+            if (url != null) putExtra("TARGET_URL", url)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -46,19 +34,32 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val channelId = "main_channel"
+        val channelId = "fcm_default_channel"
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_launcher) // تأكد من وجود أيقونة مناسبة
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
 
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // إعداد قناة الإشعارات (مطلوب في أندرويد 8 وما فوق)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Notifications", NotificationManager.IMPORTANCE_HIGH)
-            manager.createNotificationChannel(channel)
+            val channel = NotificationChannel(
+                channelId,
+                "App Notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            notificationManager.createNotificationChannel(channel)
         }
-        manager.notify(System.currentTimeMillis().toInt(), notificationBuilder.build())
+
+        notificationManager.notify(Random.nextInt(), notificationBuilder.build())
+    }
+
+    override fun onNewToken(token: String) {
+        // يتم استدعاء هذه الدالة عند إنشاء توكن جديد
+        // سنقوم بحفظه في SharedPreferences لإرساله للسيرفر لاحقاً عبر الـ WebView
+        getSharedPreferences("_", MODE_PRIVATE).edit().putString("fcm_token", token).apply()
     }
 }
