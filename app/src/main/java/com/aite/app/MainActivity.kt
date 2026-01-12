@@ -2,8 +2,10 @@ package com.aite.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.webkit.*
@@ -13,16 +15,14 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
     
-    // متغيرات لرفع الملفات
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
-    
-    // متغير لحفظ طلب الإذن القادم من الويب (للميكروفون)
     private var webPermissionRequest: PermissionRequest? = null
 
     // 1. معالج رفع الملفات
@@ -35,13 +35,13 @@ class MainActivity : AppCompatActivity() {
         fileUploadCallback = null
     }
 
-    // 2. معالج طلب إذن الميكروفون من نظام الأندرويد
-    private val requestAudioPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-        if (isGranted) {
+    // 2. معالج طلب إذن الميكروفون والإشعارات
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+        // معالجة إذن الصوت للويب
+        if (permissions[Manifest.permission.RECORD_AUDIO] == true) {
             webPermissionRequest?.grant(webPermissionRequest?.resources)
         } else {
             webPermissionRequest?.deny()
-            Toast.makeText(this, "يجب تفعيل إذن الميكروفون لتسجيل الصوت", Toast.LENGTH_SHORT).show()
         }
         webPermissionRequest = null
     }
@@ -58,11 +58,11 @@ class MainActivity : AppCompatActivity() {
         setupWebChromeClient()
         setupWebViewClient()
 
-        // --- إضافة 1: منع القائمة المنبثقة عند الضغط المطول (منع النسخ) ---
+        // منع القائمة المنبثقة
         webView.setOnLongClickListener { true }
         webView.isLongClickable = false
 
-        // التعامل مع زر الرجوع
+        // زر الرجوع
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) {
@@ -73,20 +73,35 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
-        // التحقق من وجود رابط قادم من الإشعار
-    val urlFromNotif = intent.getStringExtra("target_url")
-    if (!urlFromNotif.isNullOrEmpty()) {
-        // إذا كنت تستخدم WebView، افتح الرابط فيه:
-         myWebView.loadUrl(urlFromNotif)
-        
-        // أو افتحه في متصفح خارجي:
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(urlFromNotif))
-        startActivity(browserIntent)
-    }
-}
 
-        // رابط موقعك
-        webView.loadUrl("https://aite-lite.vercel.app") 
+        // طلب إذن الإشعارات (لأندرويد 13+)
+        if (Build.VERSION.SDK_INT >= 33) {
+             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                 requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+             }
+        }
+
+        // معالجة فتح التطبيق من الإشعار (إذا كان التطبيق مغلقاً)
+        handleNotificationIntent(intent)
+
+        // تحميل الرابط
+        if (webView.url == null) {
+            webView.loadUrl("https://aite-lite.vercel.app")
+        }
+    }
+
+    // دالة مهمة لاستقبال الإشعارات والتطبيق مفتوح أو في الخلفية
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        val targetUrl = intent?.getStringExtra("TARGET_URL")
+        if (!targetUrl.isNullOrEmpty()) {
+            webView.loadUrl(targetUrl)
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -97,12 +112,8 @@ class MainActivity : AppCompatActivity() {
         settings.domStorageEnabled = true
         settings.databaseEnabled = true
         
-        // --- إضافة 2: إصلاح مشكلة حجم الشاشة (Oppo A17 وغيرها) ---
         settings.loadWithOverviewMode = true
         settings.useWideViewPort = true
-        
-        // **هام جداً**: هذا السطر يجبر التطبيق على تجاهل إعدادات تكبير الخط في الهاتف
-        // ويجعل الموقع يظهر بحجمه الطبيعي المتناسق 100%
         settings.textZoom = 100 
 
         settings.builtInZoomControls = false
@@ -121,7 +132,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupWebChromeClient() {
         webView.webChromeClient = object : WebChromeClient() {
-            
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 if (newProgress == 100) {
                     progressBar.visibility = View.GONE
@@ -146,7 +156,7 @@ class MainActivity : AppCompatActivity() {
                         request.grant(request.resources)
                     } else {
                         webPermissionRequest = request
-                        requestAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        requestPermissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
                     }
                 } else {
                     request.grant(request.resources)
@@ -173,18 +183,29 @@ class MainActivity : AppCompatActivity() {
                 return false 
             }
 
-            // --- إضافة 3: حقن كود CSS لمنع تحديد النصوص فور انتهاء التحميل ---
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 
-                // هذا الكود يضيف Style يمنع تحديد النصوص (Select) ويمنع القوائم اللمسية (Callout)
-                val js = "javascript:(function() { " +
+                // 1. حقن CSS لمنع التحديد
+                val cssJs = "javascript:(function() { " +
                         "var style = document.createElement('style');" +
                         "style.innerHTML = 'body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }';" +
                         "document.head.appendChild(style);" +
                         "})()"
-                
-                view?.evaluateJavascript(js, null)
+                view?.evaluateJavascript(cssJs, null)
+
+                // 2. إرسال FCM Token إلى الموقع
+                sendFcmTokenToWeb(view)
+            }
+        }
+    }
+
+    private fun sendFcmTokenToWeb(view: WebView?) {
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                val token = task.result
+                // نستدعي دالة JavaScript في موقعك اسمها receiveAndroidToken
+                view?.evaluateJavascript("if(window.receiveAndroidToken) { window.receiveAndroidToken('$token'); }", null)
             }
         }
     }
