@@ -1,19 +1,26 @@
 package com.aite.app
 
 import android.Manifest
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.webkit.*
 import android.widget.ProgressBar
-import android.widget.Toast
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessaging
 
@@ -22,10 +29,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
     
+    // متغيرات صفحة الخطأ الجديدة
+    private lateinit var layoutError: View
+    private lateinit var btnRetry: View
+    private lateinit var tvAppName: TextView
+    private lateinit var logoContainer: CardView
+    
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private var webPermissionRequest: PermissionRequest? = null
 
-    // 1. معالج رفع الملفات
     private val fileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             fileUploadCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data))
@@ -35,9 +47,7 @@ class MainActivity : AppCompatActivity() {
         fileUploadCallback = null
     }
 
-    // 2. معالج طلب إذن الميكروفون والإشعارات
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        // معالجة إذن الصوت للويب
         if (permissions[Manifest.permission.RECORD_AUDIO] == true) {
             webPermissionRequest?.grant(webPermissionRequest?.resources)
         } else {
@@ -51,21 +61,38 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // تعريف العناصر
         webView = findViewById(R.id.webView)
         progressBar = findViewById(R.id.progressBar)
+        layoutError = findViewById(R.id.layoutError)
+        btnRetry = findViewById(R.id.btnRetry)
+        tvAppName = findViewById(R.id.tvAppName)
+        logoContainer = findViewById(R.id.logoContainer)
+
+        // تطبيق تأثيرات التصميم (التدرج اللوني والأنيميشن)
+        applyDesignEffects()
+
+        // برمجة زر إعادة المحاولة
+        btnRetry.setOnClickListener {
+            layoutError.visibility = View.GONE
+            webView.visibility = View.VISIBLE
+            webView.reload()
+        }
 
         setupWebViewSettings()
         setupWebChromeClient()
         setupWebViewClient()
 
-        // منع القائمة المنبثقة
         webView.setOnLongClickListener { true }
         webView.isLongClickable = false
 
-        // زر الرجوع
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) {
+                if (layoutError.visibility == View.VISIBLE) {
+                    // إذا كان في شاشة الخطأ، الخروج من التطبيق
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                } else if (webView.canGoBack()) {
                     webView.goBack()
                 } else {
                     isEnabled = false
@@ -74,23 +101,43 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        // طلب إذن الإشعارات (لأندرويد 13+)
         if (Build.VERSION.SDK_INT >= 33) {
              if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                  requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
              }
         }
 
-        // معالجة فتح التطبيق من الإشعار (إذا كان التطبيق مغلقاً)
         handleNotificationIntent(intent)
 
-        // تحميل الرابط
         if (webView.url == null) {
             webView.loadUrl("https://aite-lite.vercel.app")
         }
     }
 
-    // دالة مهمة لاستقبال الإشعارات والتطبيق مفتوح أو في الخلفية
+    // دالة لتطبيق تأثيرات التصميم المشابهة لـ CSS
+    private fun applyDesignEffects() {
+        // 1. تلوين النص بتدرج (Gradient Text)
+        // من الأبيض (#FFFFFF) إلى الأزرق (#3982f7)
+        val paint = tvAppName.paint
+        val width = paint.measureText(tvAppName.text.toString())
+        val textShader: Shader = LinearGradient(
+            0f, 0f, width, tvAppName.textSize,
+            intArrayOf(
+                Color.parseColor("#FFFFFF"),
+                Color.parseColor("#3982f7")
+            ), null, Shader.TileMode.CLAMP
+        )
+        tvAppName.paint.shader = textShader
+
+        // 2. أنيميشن الطفو (Floating Animation) للصورة
+        val floater = ObjectAnimator.ofFloat(logoContainer, "translationY", 0f, -30f)
+        floater.duration = 2000 // 2 seconds
+        floater.repeatCount = ObjectAnimator.INFINITE
+        floater.repeatMode = ObjectAnimator.REVERSE
+        floater.interpolator = AccelerateDecelerateInterpolator()
+        floater.start()
+    }
+
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -107,25 +154,19 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebViewSettings() {
         val settings = webView.settings
-        
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.databaseEnabled = true
-        
         settings.loadWithOverviewMode = true
         settings.useWideViewPort = true
         settings.textZoom = 100 
-
         settings.builtInZoomControls = false
         settings.displayZoomControls = false
         settings.setSupportZoom(false)
-        
         settings.mediaPlaybackRequiresUserGesture = false
         settings.allowFileAccess = true
         settings.allowContentAccess = true
-        
         settings.cacheMode = WebSettings.LOAD_DEFAULT
-        
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
     }
@@ -140,8 +181,9 @@ class MainActivity : AppCompatActivity() {
                     progressBar.progress = newProgress
                 }
             }
-
-            override fun onPermissionRequest(request: PermissionRequest) {
+            
+            // ... (بقية دوال الأذونات واختيار الملفات كما هي في كودك الأصلي) ...
+             override fun onPermissionRequest(request: PermissionRequest) {
                 val resources = request.resources
                 var isAudioRequest = false
                 for (resource in resources) {
@@ -179,32 +221,47 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupWebViewClient() {
         webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                return false 
+            
+            // اكتشاف الخطأ وعرض الواجهة المخصصة
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                if (request?.isForMainFrame == true) {
+                    showErrorState()
+                }
+            }
+
+            // لدعم الإصدارات القديمة
+            override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                showErrorState()
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 
-                // 1. حقن CSS لمنع التحديد
+                // إخفاء شاشة الخطأ عند نجاح التحميل
+                layoutError.visibility = View.GONE
+                webView.visibility = View.VISIBLE
+                
                 val cssJs = "javascript:(function() { " +
                         "var style = document.createElement('style');" +
                         "style.innerHTML = 'body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }';" +
                         "document.head.appendChild(style);" +
                         "})()"
                 view?.evaluateJavascript(cssJs, null)
-
-                // 2. إرسال FCM Token إلى الموقع
                 sendFcmTokenToWeb(view)
             }
         }
+    }
+
+    private fun showErrorState() {
+        webView.visibility = View.GONE
+        layoutError.visibility = View.VISIBLE
+        progressBar.visibility = View.GONE
     }
 
     private fun sendFcmTokenToWeb(view: WebView?) {
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             if (task.isSuccessful) {
                 val token = task.result
-                // نستدعي دالة JavaScript في موقعك اسمها receiveAndroidToken
                 view?.evaluateJavascript("if(window.receiveAndroidToken) { window.receiveAndroidToken('$token'); }", null)
             }
         }
