@@ -7,13 +7,13 @@ plugins {
 
 android {
     namespace 'com.aite.app'
-    compileSdk 35 // تم التعديل من 34 إلى 35
+    compileSdk 35 // تم التعديل إلى 35 للتوافق مع Android 15
 
     defaultConfig {
         applicationId "com.aite.app"
         minSdk 24
-        targetSdk 35 // تم التعديل من 34 إلى 35 (هذا هو سبب الخطأ الرئيسي)
-        versionCode 1
+        targetSdk 35 // تم التعديل إلى 35 (لحل خطأ المتجر)
+        versionCode 2 // تم التعديل من 1 إلى 2 (للسماح برفع التحديث)
         versionName "1.0"
     }
 
