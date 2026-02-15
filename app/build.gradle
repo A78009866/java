@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace 'com.aite.app'
-    compileSdk 34
+    compileSdk 35 // تم التعديل من 34 إلى 35
 
     defaultConfig {
         applicationId "com.aite.app"
         minSdk 24
-        targetSdk 34
+        targetSdk 35 // تم التعديل من 34 إلى 35 (هذا هو سبب الخطأ الرئيسي)
         versionCode 1
         versionName "1.0"
     }
