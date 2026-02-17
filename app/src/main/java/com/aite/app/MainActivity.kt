@@ -2,7 +2,6 @@ package com.aite.app
 
 import android.Manifest
 import android.animation.ObjectAnimator
-import android.animation.PropertyValuesHolder
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -28,15 +27,19 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
-    
+
     // متغيرات صفحة الخطأ الجديدة
     private lateinit var layoutError: View
     private lateinit var btnRetry: View
     private lateinit var tvAppName: TextView
     private lateinit var logoContainer: CardView
-    
+
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private var webPermissionRequest: PermissionRequest? = null
+
+    // النطاق المسموح به فقط (للحماية من الروابط الخبيثة)
+    // هام: تأكد أن هذا الرابط يطابق رابط موقعك بالضبط
+    private val ALLOWED_HOST = "aite-lite.vercel.app"
 
     private val fileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
@@ -69,7 +72,7 @@ class MainActivity : AppCompatActivity() {
         tvAppName = findViewById(R.id.tvAppName)
         logoContainer = findViewById(R.id.logoContainer)
 
-        // تطبيق تأثيرات التصميم (التدرج اللوني والأنيميشن)
+        // تطبيق تأثيرات التصميم
         applyDesignEffects()
 
         // برمجة زر إعادة المحاولة
@@ -89,7 +92,6 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (layoutError.visibility == View.VISIBLE) {
-                    // إذا كان في شاشة الخطأ، الخروج من التطبيق
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()
                 } else if (webView.canGoBack()) {
@@ -102,22 +104,20 @@ class MainActivity : AppCompatActivity() {
         })
 
         if (Build.VERSION.SDK_INT >= 33) {
-             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                 requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
-             }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            }
         }
 
+        // معالجة الرابط القادم من الإشعار بشكل آمن
         handleNotificationIntent(intent)
 
         if (webView.url == null) {
-            webView.loadUrl("https://aite-lite.vercel.app")
+            webView.loadUrl("https://$ALLOWED_HOST")
         }
     }
 
-    // دالة لتطبيق تأثيرات التصميم المشابهة لـ CSS
     private fun applyDesignEffects() {
-        // 1. تلوين النص بتدرج (Gradient Text)
-        // من الأبيض (#FFFFFF) إلى الأزرق (#3982f7)
         val paint = tvAppName.paint
         val width = paint.measureText(tvAppName.text.toString())
         val textShader: Shader = LinearGradient(
@@ -129,9 +129,8 @@ class MainActivity : AppCompatActivity() {
         )
         tvAppName.paint.shader = textShader
 
-        // 2. أنيميشن الطفو (Floating Animation) للصورة
         val floater = ObjectAnimator.ofFloat(logoContainer, "translationY", 0f, -30f)
-        floater.duration = 2000 // 2 seconds
+        floater.duration = 2000
         floater.repeatCount = ObjectAnimator.INFINITE
         floater.repeatMode = ObjectAnimator.REVERSE
         floater.interpolator = AccelerateDecelerateInterpolator()
@@ -144,10 +143,47 @@ class MainActivity : AppCompatActivity() {
         handleNotificationIntent(intent)
     }
 
+    /**
+     * دالة الأمان المصححة: تتحقق من الرابط قبل تحميله
+     * هذا يحل مشكلة Cross-App Scripting
+     */
     private fun handleNotificationIntent(intent: Intent?) {
         val targetUrl = intent?.getStringExtra("TARGET_URL")
+        
         if (!targetUrl.isNullOrEmpty()) {
-            webView.loadUrl(targetUrl)
+            // التحقق مما إذا كان الرابط آمناً وينتمي لنطاق تطبيقك
+            if (isSafeUrl(targetUrl)) {
+                webView.loadUrl(targetUrl)
+            } else {
+                // إذا كان الرابط مشبوهاً، قم بتحميل الصفحة الرئيسية بدلاً منه
+                // أو تجاهله تماماً للحماية
+                if (webView.url == null) {
+                    webView.loadUrl("https://$ALLOWED_HOST")
+                }
+            }
+        }
+    }
+
+    /**
+     * دالة للتحقق من أن الرابط ينتمي لنطاقنا وليس كود خبيث
+     */
+    private fun isSafeUrl(url: String): Boolean {
+        try {
+            // منع تنفيذ أكواد جافا سكريبت أو ملفات محلية عبر الـ Intent
+            if (url.startsWith("javascript:", true) || url.startsWith("file:", true)) {
+                return false
+            }
+
+            val uri = Uri.parse(url)
+            val scheme = uri.scheme
+            val host = uri.host
+
+            // 1. يجب أن يكون البروتوكول http أو https
+            // 2. يجب أن يكون النطاق (Host) هو موقعك فقط
+            return (scheme.equals("https", true) || scheme.equals("http", true)) &&
+                    (host != null && (host.equals(ALLOWED_HOST, true) || host.endsWith(".$ALLOWED_HOST", true)))
+        } catch (e: Exception) {
+            return false
         }
     }
 
@@ -159,13 +195,18 @@ class MainActivity : AppCompatActivity() {
         settings.databaseEnabled = true
         settings.loadWithOverviewMode = true
         settings.useWideViewPort = true
-        settings.textZoom = 100 
+        settings.textZoom = 100
         settings.builtInZoomControls = false
         settings.displayZoomControls = false
         settings.setSupportZoom(false)
         settings.mediaPlaybackRequiresUserGesture = false
-        settings.allowFileAccess = true
+        
+        // تحسينات الأمان:
+        // السماح بالوصول للملفات فقط إذا كان ضرورياً جداً، ولكن يفضل إيقافه
+        // لمنع سرقة ملفات المستخدم إذا تم استغلال ثغرة
+        settings.allowFileAccess = false 
         settings.allowContentAccess = true
+        
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
@@ -181,9 +222,8 @@ class MainActivity : AppCompatActivity() {
                     progressBar.progress = newProgress
                 }
             }
-            
-            // ... (بقية دوال الأذونات واختيار الملفات كما هي في كودك الأصلي) ...
-             override fun onPermissionRequest(request: PermissionRequest) {
+
+            override fun onPermissionRequest(request: PermissionRequest) {
                 val resources = request.resources
                 var isAudioRequest = false
                 for (resource in resources) {
@@ -221,26 +261,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupWebViewClient() {
         webView.webViewClient = object : WebViewClient() {
-            
-            // اكتشاف الخطأ وعرض الواجهة المخصصة
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                 if (request?.isForMainFrame == true) {
                     showErrorState()
                 }
             }
 
-            // لدعم الإصدارات القديمة
             override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
                 showErrorState()
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                
-                // إخفاء شاشة الخطأ عند نجاح التحميل
                 layoutError.visibility = View.GONE
                 webView.visibility = View.VISIBLE
-                
+
                 val cssJs = "javascript:(function() { " +
                         "var style = document.createElement('style');" +
                         "style.innerHTML = 'body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }';" +
@@ -248,6 +283,22 @@ class MainActivity : AppCompatActivity() {
                         "})()"
                 view?.evaluateJavascript(cssJs, null)
                 sendFcmTokenToWeb(view)
+            }
+            
+            // إضافة أمان إضافي للتأكد من أن الروابط الخارجية لا تخرج عن السيطرة
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url?.toString() ?: return false
+                // إذا كان الرابط آمناً (من موقعنا) اسمح به، غير ذلك يمكن فتحه في المتصفح الخارجي أو منعه
+                return if (isSafeUrl(url)) {
+                    false // اسمح للـ WebView بتحميله
+                } else {
+                    // يمكنك هنا فتح الروابط الخارجية في المتصفح الافتراضي بدلاً من التطبيق
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        startActivity(intent)
+                    } catch (e: Exception) {}
+                    true // منع الـ WebView من تحميله
+                }
             }
         }
     }
