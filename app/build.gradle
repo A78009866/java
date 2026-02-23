@@ -13,7 +13,7 @@ android {
         applicationId "com.aite.app"
         minSdk 24
         targetSdk 35 // تم التعديل إلى 35 (لحل خطأ المتجر)
-        versionCode 2 // تم التعديل من 1 إلى 2 (للسماح برفع التحديث)
+        versionCode 3 // تم التعديل من 1 إلى 2 (للسماح برفع التحديث)
         versionName "1.0"
     }
 
