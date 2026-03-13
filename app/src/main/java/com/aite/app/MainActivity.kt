@@ -34,6 +34,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvAppName: TextView
     private lateinit var logoContainer: CardView
 
+    // علامة لتتبع حالة الخطأ حتى لا يتم إخفاء صفحة الخطأ المخصصة
+    private var isErrorOccurred = false
+
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private var webPermissionRequest: PermissionRequest? = null
 
@@ -77,6 +80,7 @@ class MainActivity : AppCompatActivity() {
 
         // برمجة زر إعادة المحاولة
         btnRetry.setOnClickListener {
+            isErrorOccurred = false
             layoutError.visibility = View.GONE
             webView.visibility = View.VISIBLE
             webView.reload()
@@ -263,16 +267,22 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                 if (request?.isForMainFrame == true) {
+                    isErrorOccurred = true
                     showErrorState()
                 }
             }
 
             override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                isErrorOccurred = true
                 showErrorState()
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                if (isErrorOccurred) {
+                    // لا تُظهر الـ WebView إذا كان هناك خطأ - أبقِ صفحة الخطأ المخصصة ظاهرة
+                    return
+                }
                 layoutError.visibility = View.GONE
                 webView.visibility = View.VISIBLE
 
@@ -290,6 +300,7 @@ class MainActivity : AppCompatActivity() {
                 val url = request?.url?.toString() ?: return false
                 // إذا كان الرابط آمناً (من موقعنا) اسمح به، غير ذلك يمكن فتحه في المتصفح الخارجي أو منعه
                 return if (isSafeUrl(url)) {
+                    isErrorOccurred = false
                     false // اسمح للـ WebView بتحميله
                 } else {
                     // يمكنك هنا فتح الروابط الخارجية في المتصفح الافتراضي بدلاً من التطبيق
