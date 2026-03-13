@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -13,53 +15,92 @@ import kotlin.random.Random
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
+    companion object {
+        private const val CHANNEL_ID = "fcm_default_channel"
+        private const val CHANNEL_NAME = "App Notifications"
+    }
+
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        // استلام البيانات من السيرفر
         val title = remoteMessage.data["title"] ?: remoteMessage.notification?.title ?: "إشعار جديد"
         val body = remoteMessage.data["body"] ?: remoteMessage.notification?.body ?: ""
-        val targetUrl = remoteMessage.data["url"] // الرابط الذي نريد التوجيه إليه
+        val targetUrl = remoteMessage.data["url"]
 
         showNotification(title, body, targetUrl)
     }
 
     private fun showNotification(title: String, body: String, url: String?) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // إنشاء قناة الإشعارات بأعلى أهمية (مطلوب في أندرويد 8 وما فوق)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val existingChannel = notificationManager.getNotificationChannel(CHANNEL_ID)
+            if (existingChannel == null) {
+                val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                val audioAttributes = AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .build()
+
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "إشعارات التطبيق - رسائل، إعجابات، تعليقات، طلبات صداقة"
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 300, 200, 300)
+                    enableLights(true)
+                    lightColor = android.graphics.Color.parseColor("#3982f7")
+                    setSound(soundUri, audioAttributes)
+                    setShowBadge(true)
+                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+        }
+
         val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            // نمرر الرابط للـ MainActivity
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             if (url != null) putExtra("TARGET_URL", url)
         }
 
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
+            this, System.currentTimeMillis().toInt(), intent,
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val channelId = "fcm_default_channel"
-        val notificationBuilder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher) // تأكد من وجود أيقونة مناسبة
+        val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            // أولوية عالية لإظهار الإشعار كـ Heads-up (مثل ماسنجر)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            // صوت الإشعار الافتراضي
+            .setSound(defaultSoundUri)
+            // اهتزاز عند وصول الإشعار
+            .setVibrate(longArrayOf(0, 300, 200, 300))
+            // إضاءة LED
+            .setLights(android.graphics.Color.parseColor("#3982f7"), 1000, 500)
+            // تصنيف الإشعار كرسالة (يساعد النظام في إعطائه أولوية)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            // إظهار الإشعار على شاشة القفل
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            // عرض النص الطويل بالكامل
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            // إظهار الوقت
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
+            // إضافة إعدادات افتراضية (صوت + اهتزاز + إضاءة)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
 
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // إعداد قناة الإشعارات (مطلوب في أندرويد 8 وما فوق)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "App Notifications",
-                NotificationManager.IMPORTANCE_HIGH
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        notificationManager.notify(Random.nextInt(), notificationBuilder.build())
+        notificationManager.notify(Random.nextInt(100000), notificationBuilder.build())
     }
 
     override fun onNewToken(token: String) {
-        // يتم استدعاء هذه الدالة عند إنشاء توكن جديد
-        // سنقوم بحفظه في SharedPreferences لإرساله للسيرفر لاحقاً عبر الـ WebView
         getSharedPreferences("_", MODE_PRIVATE).edit().putString("fcm_token", token).apply()
     }
 }
