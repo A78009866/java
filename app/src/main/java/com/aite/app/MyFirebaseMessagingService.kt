@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -35,7 +36,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val existingChannel = notificationManager.getNotificationChannel(CHANNEL_ID)
             if (existingChannel == null) {
-                val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                // استخدام صوت الإشعار المخصص من مجلد raw
+                val soundUri = Uri.parse("android.resource://${packageName}/${R.raw.notification}")
                 val audioAttributes = AudioAttributes.Builder()
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .setUsage(AudioAttributes.USAGE_NOTIFICATION)
@@ -69,7 +71,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        // استخدام صوت الإشعار المخصص
+        val customSoundUri = Uri.parse("android.resource://${packageName}/${R.raw.notification}")
 
         val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
@@ -79,8 +82,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             .setContentIntent(pendingIntent)
             // أولوية عالية لإظهار الإشعار كـ Heads-up (مثل ماسنجر)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            // صوت الإشعار الافتراضي
-            .setSound(defaultSoundUri)
+            // صوت الإشعار المخصص
+            .setSound(customSoundUri)
             // اهتزاز عند وصول الإشعار
             .setVibrate(longArrayOf(0, 300, 200, 300))
             // إضاءة LED
@@ -94,8 +97,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             // إظهار الوقت
             .setWhen(System.currentTimeMillis())
             .setShowWhen(true)
-            // إضافة إعدادات افتراضية (صوت + اهتزاز + إضاءة)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            // إضافة إعدادات افتراضية (اهتزاز + إضاءة) بدون الصوت لأننا نستخدم صوت مخصص
+            .setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
 
         notificationManager.notify(Random.nextInt(100000), notificationBuilder.build())
     }
