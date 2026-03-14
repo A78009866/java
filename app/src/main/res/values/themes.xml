@@ -1,8 +1,19 @@
 <resources>
+    <!-- ثيم التشغيل: يظهر فوراً عند النقر على الأيقونة -->
+    <style name="Theme.Aite.Launcher" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#000000</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowBackground">@drawable/bg_splash_gradient</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
+
+    <!-- الثيم الأساسي للتطبيق -->
     <style name="Theme.Aite" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#000000</item>
         <item name="android:statusBarColor">#000000</item>
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowIsTranslucent">false</item>
     </style>
 </resources>
