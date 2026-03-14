@@ -18,7 +18,7 @@ import kotlin.random.Random
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     companion object {
-        private const val CHANNEL_ID = "fcm_default_channel"
+        private const val CHANNEL_ID = "fcm_channel_v2"
         private const val CHANNEL_NAME = "App Notifications"
     }
 
@@ -79,7 +79,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val largeIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
 
         val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setLargeIcon(largeIcon)
             .setContentTitle(title)
             .setContentText(body)

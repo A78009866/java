@@ -54,12 +54,12 @@
         <!-- قناة الإشعارات الافتراضية لـ Firebase عندما يكون التطبيق في الخلفية -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="fcm_default_channel" />
+            android:value="fcm_channel_v2" />
 
         <!-- أيقونة الإشعار الافتراضية لـ Firebase عندما يكون التطبيق في الخلفية -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_notification" />
+            android:resource="@mipmap/ic_launcher" />
 
         <!-- لون الإشعار الافتراضي -->
         <meta-data

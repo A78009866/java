@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.provider.Settings
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Shader
@@ -78,6 +79,26 @@ class MainActivity : AppCompatActivity() {
             webPermissionRequest?.deny()
         }
         webPermissionRequest = null
+    }
+
+    // طلب إذن الإشعارات تلقائياً
+    private val notificationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) {
+            // إذا رفض المستخدم، افتح إعدادات الإشعارات للتطبيق مباشرة
+            try {
+                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                try {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", packageName, null)
+                    }
+                    startActivity(intent)
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
@@ -150,11 +171,18 @@ class MainActivity : AppCompatActivity() {
                 }
             })
 
-            // طلب الإذن بعد الانتهاء من العرض
-            if (Build.VERSION.SDK_INT >= 33) {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
-                }
+            // طلب إذن الإشعارات تلقائياً عند كل تشغيل
+            requestNotificationPermission()
+        }
+    }
+
+    /**
+     * طلب إذن الإشعارات تلقائياً - إذا رُفض يفتح إعدادات التطبيق
+     */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }
@@ -165,7 +193,13 @@ class MainActivity : AppCompatActivity() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val existingChannel = notificationManager.getNotificationChannel("fcm_default_channel")
+
+            // حذف القناة القديمة إن وجدت
+            try {
+                notificationManager.deleteNotificationChannel("fcm_default_channel")
+            } catch (_: Exception) {}
+
+            val existingChannel = notificationManager.getNotificationChannel("fcm_channel_v2")
             if (existingChannel == null) {
                 val soundUri = Uri.parse("android.resource://${packageName}/${R.raw.notification}")
                 val audioAttributes = AudioAttributes.Builder()
@@ -174,7 +208,7 @@ class MainActivity : AppCompatActivity() {
                     .build()
 
                 val channel = NotificationChannel(
-                    "fcm_default_channel",
+                    "fcm_channel_v2",
                     "App Notifications",
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
