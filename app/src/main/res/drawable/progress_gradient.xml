@@ -7,11 +7,11 @@
         <clip>
             <shape>
                 <gradient
-                    android:startColor="#3982f7"
-                    android:centerColor="#5b9cf9"
-                    android:endColor="#7832dc"
+                    android:startColor="#2979FF"
+                    android:centerColor="#448AFF"
+                    android:endColor="#82B1FF"
                     android:angle="0"/>
-                <corners android:radius="2dp"/>
+                <corners android:radius="3dp"/>
             </shape>
         </clip>
     </item>

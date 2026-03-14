@@ -147,14 +147,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * إعداد edge-to-edge display لمظهر أصلي حديث
+     * إعداد العرض بحيث لا يتجاوز المحتوى أشرطة النظام
      */
     private fun setupEdgeToEdge() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowCompat.setDecorFitsSystemWindows(window, true)
 
-        // شريط حالة وتنقل شفاف
-        window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
+        // شريط حالة وتنقل أسود ليتناسب مع خلفية التطبيق
+        window.statusBarColor = Color.BLACK
+        window.navigationBarColor = Color.BLACK
 
         // أيقونات شريط الحالة فاتحة (لأن الخلفية داكنة)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
@@ -300,14 +300,14 @@ class MainActivity : AppCompatActivity() {
                     // أكمل الشريط ثم أخفه بسلاسة
                     progressAnimator?.cancel()
                     progressAnimator = ObjectAnimator.ofInt(progressBar, "progress", progressBar.progress, 100)
-                    progressAnimator?.duration = 200
+                    progressAnimator?.duration = 150
                     progressAnimator?.interpolator = DecelerateInterpolator()
                     progressAnimator?.start()
 
                     progressBar.animate()
                         .alpha(0f)
-                        .setStartDelay(250)
-                        .setDuration(300)
+                        .setStartDelay(300)
+                        .setDuration(400)
                         .withEndAction {
                             progressBar.visibility = View.GONE
                             progressBar.alpha = 1f
@@ -319,12 +319,13 @@ class MainActivity : AppCompatActivity() {
                         progressBar.progress = 0
                         progressBar.alpha = 0f
                         progressBar.visibility = View.VISIBLE
-                        progressBar.animate().alpha(1f).setDuration(200).setStartDelay(0).start()
+                        progressBar.animate().alpha(1f).setDuration(150).setStartDelay(0).start()
                     }
                     // أنيميشن سلس لقيمة التقدم
                     progressAnimator?.cancel()
-                    progressAnimator = ObjectAnimator.ofInt(progressBar, "progress", progressBar.progress, newProgress)
-                    progressAnimator?.duration = 300
+                    val targetProgress = if (newProgress < 10) 10 else newProgress
+                    progressAnimator = ObjectAnimator.ofInt(progressBar, "progress", progressBar.progress, targetProgress)
+                    progressAnimator?.duration = 250
                     progressAnimator?.interpolator = DecelerateInterpolator()
                     progressAnimator?.start()
                 }

@@ -2,8 +2,8 @@
     <!-- ثيم التشغيل: خلفية سوداء فقط بدون أيقونة -->
     <style name="Theme.Aite.Launcher" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#000000</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
@@ -13,8 +13,8 @@
     <!-- الثيم الأساسي للتطبيق -->
     <style name="Theme.Aite" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#000000</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
