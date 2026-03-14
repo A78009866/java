@@ -4,8 +4,12 @@ import android.Manifest
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Shader
@@ -27,12 +31,14 @@ import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
+    private lateinit var swipeRefresh: SwipeRefreshLayout
 
     // متغيرات صفحة الخطأ الجديدة
     private lateinit var layoutError: View
@@ -88,16 +94,23 @@ class MainActivity : AppCompatActivity() {
         // تعريف العناصر
         webView = findViewById(R.id.webView)
         progressBar = findViewById(R.id.progressBar)
+        swipeRefresh = findViewById(R.id.swipeRefresh)
         layoutError = findViewById(R.id.layoutError)
         btnRetry = findViewById(R.id.btnRetry)
         tvAppName = findViewById(R.id.tvAppName)
         logoContainer = findViewById(R.id.logoContainer)
+
+        // إنشاء قناة الإشعارات مبكراً حتى تعمل الإشعارات في الخلفية
+        createNotificationChannel()
 
         // إعداد WebView كتطبيق أصلي
         setupNativeWebView()
         setupWebViewSettings()
         setupWebChromeClient()
         setupWebViewClient()
+
+        // إعداد السحب للتحديث
+        setupSwipeRefresh()
 
         // إخفاء WebView حتى يتم التحميل الكامل (لإظهار splash بدلاً من صفحة بيضاء)
         webView.visibility = View.INVISIBLE
@@ -143,6 +156,54 @@ class MainActivity : AppCompatActivity() {
                     requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
                 }
             }
+        }
+    }
+
+    /**
+     * إنشاء قناة الإشعارات عند بدء التطبيق حتى تعمل الإشعارات في الخلفية
+     */
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val existingChannel = notificationManager.getNotificationChannel("fcm_default_channel")
+            if (existingChannel == null) {
+                val soundUri = Uri.parse("android.resource://${packageName}/${R.raw.notification}")
+                val audioAttributes = AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .build()
+
+                val channel = NotificationChannel(
+                    "fcm_default_channel",
+                    "App Notifications",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "إشعارات التطبيق"
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 300, 200, 300)
+                    enableLights(true)
+                    lightColor = Color.parseColor("#3982f7")
+                    setSound(soundUri, audioAttributes)
+                    setShowBadge(true)
+                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+        }
+    }
+
+    /**
+     * إعداد السحب للتحديث (Pull to Refresh)
+     */
+    private fun setupSwipeRefresh() {
+        swipeRefresh.setColorSchemeColors(
+            Color.parseColor("#64B5F6"),
+            Color.parseColor("#42A5F5"),
+            Color.parseColor("#2196F3")
+        )
+        swipeRefresh.setProgressBackgroundColorSchemeColor(Color.parseColor("#1A1A1A"))
+        swipeRefresh.setOnRefreshListener {
+            webView.reload()
         }
     }
 
@@ -297,17 +358,17 @@ class MainActivity : AppCompatActivity() {
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 if (newProgress == 100) {
-                    // أكمل الشريط ثم أخفه بسلاسة
+                    // أكمل الشريط بسرعة ثم أخفه
                     progressAnimator?.cancel()
                     progressAnimator = ObjectAnimator.ofInt(progressBar, "progress", progressBar.progress, 100)
-                    progressAnimator?.duration = 150
+                    progressAnimator?.duration = 100
                     progressAnimator?.interpolator = DecelerateInterpolator()
                     progressAnimator?.start()
 
                     progressBar.animate()
                         .alpha(0f)
-                        .setStartDelay(300)
-                        .setDuration(400)
+                        .setStartDelay(150)
+                        .setDuration(200)
                         .withEndAction {
                             progressBar.visibility = View.GONE
                             progressBar.alpha = 1f
@@ -319,13 +380,13 @@ class MainActivity : AppCompatActivity() {
                         progressBar.progress = 0
                         progressBar.alpha = 0f
                         progressBar.visibility = View.VISIBLE
-                        progressBar.animate().alpha(1f).setDuration(150).setStartDelay(0).start()
+                        progressBar.animate().alpha(1f).setDuration(100).setStartDelay(0).start()
                     }
-                    // أنيميشن سلس لقيمة التقدم
+                    // أنيميشن سريع لقيمة التقدم
                     progressAnimator?.cancel()
-                    val targetProgress = if (newProgress < 10) 10 else newProgress
+                    val targetProgress = if (newProgress < 15) 15 else newProgress
                     progressAnimator = ObjectAnimator.ofInt(progressBar, "progress", progressBar.progress, targetProgress)
-                    progressAnimator?.duration = 250
+                    progressAnimator?.duration = 150
                     progressAnimator?.interpolator = DecelerateInterpolator()
                     progressAnimator?.start()
                 }
@@ -383,6 +444,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                swipeRefresh.isRefreshing = false
                 if (isErrorOccurred) {
                     return
                 }
@@ -490,6 +552,7 @@ class MainActivity : AppCompatActivity() {
         webView.visibility = View.GONE
         layoutError.visibility = View.VISIBLE
         progressBar.visibility = View.GONE
+        swipeRefresh.isRefreshing = false
     }
 
     private fun sendFcmTokenToWeb(view: WebView?) {

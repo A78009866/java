@@ -75,7 +75,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val customSoundUri = Uri.parse("android.resource://${packageName}/${R.raw.notification}")
 
         val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
@@ -97,8 +97,6 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             // إظهار الوقت
             .setWhen(System.currentTimeMillis())
             .setShowWhen(true)
-            // إضافة إعدادات افتراضية (اهتزاز + إضاءة) بدون الصوت لأننا نستخدم صوت مخصص
-            .setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
 
         notificationManager.notify(Random.nextInt(100000), notificationBuilder.build())
     }
