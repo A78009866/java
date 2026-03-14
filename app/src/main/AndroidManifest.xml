@@ -27,7 +27,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Aite"
+        android:theme="@style/Theme.Aite.Launcher"
         android:hardwareAccelerated="true"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
