@@ -2,6 +2,7 @@ package com.aite.app
 
 import android.Manifest
 import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -15,6 +16,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.webkit.*
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -23,6 +25,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : AppCompatActivity() {
@@ -38,6 +42,12 @@ class MainActivity : AppCompatActivity() {
 
     // علامة لتتبع حالة الخطأ حتى لا يتم إخفاء صفحة الخطأ المخصصة
     private var isErrorOccurred = false
+
+    // علامة لتتبع أول تحميل ناجح
+    private var isFirstLoadComplete = false
+
+    // أنيميشن شريط التقدم
+    private var progressAnimator: ObjectAnimator? = null
 
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private var webPermissionRequest: PermissionRequest? = null
@@ -69,6 +79,10 @@ class MainActivity : AppCompatActivity() {
         // التبديل من ثيم التشغيل إلى الثيم الأساسي قبل setContentView
         setTheme(R.style.Theme_Aite)
         super.onCreate(savedInstanceState)
+
+        // عرض edge-to-edge لمظهر أصلي
+        setupEdgeToEdge()
+
         setContentView(R.layout.activity_main)
 
         // تعريف العناصر
@@ -79,13 +93,14 @@ class MainActivity : AppCompatActivity() {
         tvAppName = findViewById(R.id.tvAppName)
         logoContainer = findViewById(R.id.logoContainer)
 
-        // إعداد WebView أولاً (الأولوية العليا)
+        // إعداد WebView كتطبيق أصلي
+        setupNativeWebView()
         setupWebViewSettings()
         setupWebChromeClient()
         setupWebViewClient()
 
-        webView.setOnLongClickListener { true }
-        webView.isLongClickable = false
+        // إخفاء WebView حتى يتم التحميل الكامل (لإظهار splash بدلاً من صفحة بيضاء)
+        webView.visibility = View.INVISIBLE
 
         // تحميل الصفحة فوراً
         handleNotificationIntent(intent)
@@ -102,8 +117,9 @@ class MainActivity : AppCompatActivity() {
             // برمجة زر إعادة المحاولة
             btnRetry.setOnClickListener {
                 isErrorOccurred = false
+                isFirstLoadComplete = false
                 layoutError.visibility = View.GONE
-                webView.visibility = View.VISIBLE
+                webView.visibility = View.INVISIBLE
                 webView.reload()
             }
 
@@ -128,6 +144,51 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * إعداد edge-to-edge display لمظهر أصلي حديث
+     */
+    private fun setupEdgeToEdge() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // شريط حالة وتنقل شفاف
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+
+        // أيقونات شريط الحالة فاتحة (لأن الخلفية داكنة)
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.isAppearanceLightStatusBars = false
+        controller.isAppearanceLightNavigationBars = false
+    }
+
+    /**
+     * إعداد WebView ليبدو كتطبيق أصلي بدون أي علامات ويب
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupNativeWebView() {
+        // إخفاء أشرطة التمرير بالكامل
+        webView.isVerticalScrollBarEnabled = false
+        webView.isHorizontalScrollBarEnabled = false
+
+        // إزالة تأثير الإفراط في التمرير (overscroll glow)
+        webView.overScrollMode = View.OVER_SCROLL_NEVER
+
+        // خلفية سوداء مطابقة للتطبيق
+        webView.setBackgroundColor(Color.BLACK)
+
+        // منع القائمة المنبثقة عند الضغط المطول
+        webView.setOnLongClickListener { true }
+        webView.isLongClickable = false
+        webView.isHapticFeedbackEnabled = false
+
+        // تعيين أولوية عالية للتقديم
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+        }
+
+        // تفعيل تسريع العتاد
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
     }
 
     private fun applyDesignEffects() {
@@ -214,13 +275,20 @@ class MainActivity : AppCompatActivity() {
         settings.setSupportZoom(false)
         settings.mediaPlaybackRequiresUserGesture = false
         
-        // تحسينات الأمان:
-        // السماح بالوصول للملفات فقط إذا كان ضرورياً جداً، ولكن يفضل إيقافه
-        // لمنع سرقة ملفات المستخدم إذا تم استغلال ثغرة
+        // تحسينات الأمان
         settings.allowFileAccess = false 
         settings.allowContentAccess = true
         
+        // تحسينات الأداء والتخزين المؤقت
         settings.cacheMode = WebSettings.LOAD_DEFAULT
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        settings.setGeolocationEnabled(false)
+        
+        // إعدادات لمظهر أصلي
+        settings.setSupportMultipleWindows(false)
+        settings.javaScriptCanOpenWindowsAutomatically = false
+        settings.setNeedInitialFocus(false)
+
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
     }
@@ -229,10 +297,36 @@ class MainActivity : AppCompatActivity() {
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 if (newProgress == 100) {
-                    progressBar.visibility = View.GONE
+                    // أكمل الشريط ثم أخفه بسلاسة
+                    progressAnimator?.cancel()
+                    progressAnimator = ObjectAnimator.ofInt(progressBar, "progress", progressBar.progress, 100)
+                    progressAnimator?.duration = 200
+                    progressAnimator?.interpolator = DecelerateInterpolator()
+                    progressAnimator?.start()
+
+                    progressBar.animate()
+                        .alpha(0f)
+                        .setStartDelay(250)
+                        .setDuration(300)
+                        .withEndAction {
+                            progressBar.visibility = View.GONE
+                            progressBar.alpha = 1f
+                            progressBar.progress = 0
+                        }
+                        .start()
                 } else {
-                    if (progressBar.visibility == View.GONE) progressBar.visibility = View.VISIBLE
-                    progressBar.progress = newProgress
+                    if (progressBar.visibility == View.GONE) {
+                        progressBar.progress = 0
+                        progressBar.alpha = 0f
+                        progressBar.visibility = View.VISIBLE
+                        progressBar.animate().alpha(1f).setDuration(200).setStartDelay(0).start()
+                    }
+                    // أنيميشن سلس لقيمة التقدم
+                    progressAnimator?.cancel()
+                    progressAnimator = ObjectAnimator.ofInt(progressBar, "progress", progressBar.progress, newProgress)
+                    progressAnimator?.duration = 300
+                    progressAnimator?.interpolator = DecelerateInterpolator()
+                    progressAnimator?.start()
                 }
             }
 
@@ -289,18 +383,27 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 if (isErrorOccurred) {
-                    // لا تُظهر الـ WebView إذا كان هناك خطأ - أبقِ صفحة الخطأ المخصصة ظاهرة
                     return
                 }
-                layoutError.visibility = View.GONE
-                webView.visibility = View.VISIBLE
 
-                val cssJs = "javascript:(function() { " +
-                        "var style = document.createElement('style');" +
-                        "style.innerHTML = 'body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }';" +
-                        "document.head.appendChild(style);" +
-                        "})()"
-                view?.evaluateJavascript(cssJs, null)
+                // حقن CSS و JS شامل لإزالة جميع علامات الويب
+                injectNativeStyles(view)
+
+                // إظهار WebView بتأثير تلاشي سلس
+                if (!isFirstLoadComplete) {
+                    isFirstLoadComplete = true
+                    layoutError.visibility = View.GONE
+                    webView.alpha = 0f
+                    webView.visibility = View.VISIBLE
+                    webView.animate()
+                        .alpha(1f)
+                        .setDuration(300)
+                        .start()
+                } else {
+                    layoutError.visibility = View.GONE
+                    webView.visibility = View.VISIBLE
+                }
+
                 sendFcmTokenToWeb(view)
             }
             
@@ -321,6 +424,65 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * حقن CSS و JS لإزالة جميع علامات الويب وجعل التطبيق يبدو أصلي
+     */
+    private fun injectNativeStyles(view: WebView?) {
+        val nativeJS = """(function() {
+            var style = document.createElement('style');
+            style.id = 'native-app-styles';
+            style.innerHTML = '\
+                * { \
+                    -webkit-tap-highlight-color: transparent !important; \
+                    -webkit-touch-callout: none !important; \
+                    -webkit-user-select: none !important; \
+                    user-select: none !important; \
+                    outline: none !important; \
+                } \
+                input, textarea, [contenteditable="true"] { \
+                    -webkit-user-select: text !important; \
+                    user-select: text !important; \
+                } \
+                ::-webkit-scrollbar { \
+                    display: none !important; \
+                    width: 0 !important; \
+                    height: 0 !important; \
+                } \
+                * { \
+                    scrollbar-width: none !important; \
+                    -ms-overflow-style: none !important; \
+                } \
+                body { \
+                    -webkit-user-drag: none !important; \
+                    -webkit-text-size-adjust: none !important; \
+                    overscroll-behavior: none !important; \
+                    overflow-x: hidden !important; \
+                } \
+                a, button, input, select, textarea { \
+                    -webkit-tap-highlight-color: rgba(0,0,0,0) !important; \
+                } \
+                img { \
+                    -webkit-user-drag: none !important; \
+                    user-drag: none !important; \
+                } \
+            ';
+            var old = document.getElementById('native-app-styles');
+            if (old) old.remove();
+            document.head.appendChild(style);
+            document.addEventListener('contextmenu', function(e) {
+                var tag = e.target.tagName.toLowerCase();
+                if (tag !== 'input' && tag !== 'textarea' && !e.target.isContentEditable) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+            document.addEventListener('dragstart', function(e) {
+                e.preventDefault();
+            }, { passive: false });
+        })();""".trimIndent()
+
+        view?.evaluateJavascript(nativeJS, null)
     }
 
     private fun showErrorState() {

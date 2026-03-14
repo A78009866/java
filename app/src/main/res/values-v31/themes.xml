@@ -1,5 +1,5 @@
 <resources>
-    <!-- ثيم التشغيل: خلفية سوداء فقط بدون أيقونة -->
+    <!-- ثيم التشغيل لأندرويد 12+ : إخفاء الأيقونة من شاشة البداية -->
     <style name="Theme.Aite.Launcher" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#000000</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
@@ -8,6 +8,9 @@
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowSplashScreenBackground">#000000</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#000000</item>
     </style>
 
     <!-- الثيم الأساسي للتطبيق -->
