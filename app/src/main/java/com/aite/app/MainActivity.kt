@@ -11,6 +11,8 @@ import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.webkit.*
@@ -64,6 +66,8 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
+        // التبديل من ثيم التشغيل إلى الثيم الأساسي قبل setContentView
+        setTheme(R.style.Theme_Aite)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -75,17 +79,7 @@ class MainActivity : AppCompatActivity() {
         tvAppName = findViewById(R.id.tvAppName)
         logoContainer = findViewById(R.id.logoContainer)
 
-        // تطبيق تأثيرات التصميم
-        applyDesignEffects()
-
-        // برمجة زر إعادة المحاولة
-        btnRetry.setOnClickListener {
-            isErrorOccurred = false
-            layoutError.visibility = View.GONE
-            webView.visibility = View.VISIBLE
-            webView.reload()
-        }
-
+        // إعداد WebView أولاً (الأولوية العليا)
         setupWebViewSettings()
         setupWebChromeClient()
         setupWebViewClient()
@@ -93,31 +87,46 @@ class MainActivity : AppCompatActivity() {
         webView.setOnLongClickListener { true }
         webView.isLongClickable = false
 
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (layoutError.visibility == View.VISIBLE) {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                } else if (webView.canGoBack()) {
-                    webView.goBack()
-                } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                }
-            }
-        })
-
-        if (Build.VERSION.SDK_INT >= 33) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
-            }
-        }
-
-        // معالجة الرابط القادم من الإشعار بشكل آمن
+        // تحميل الصفحة فوراً
         handleNotificationIntent(intent)
-
         if (webView.url == null) {
             webView.loadUrl("https://$ALLOWED_HOST")
+        }
+
+        // تأجيل الأعمال غير الضرورية بعد العرض الأول
+        val handler = Handler(Looper.getMainLooper())
+        handler.post {
+            // تطبيق تأثيرات التصميم
+            applyDesignEffects()
+
+            // برمجة زر إعادة المحاولة
+            btnRetry.setOnClickListener {
+                isErrorOccurred = false
+                layoutError.visibility = View.GONE
+                webView.visibility = View.VISIBLE
+                webView.reload()
+            }
+
+            onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (layoutError.visibility == View.VISIBLE) {
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                    } else if (webView.canGoBack()) {
+                        webView.goBack()
+                    } else {
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                    }
+                }
+            })
+
+            // طلب الإذن بعد الانتهاء من العرض
+            if (Build.VERSION.SDK_INT >= 33) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                }
+            }
         }
     }
 
