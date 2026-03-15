@@ -32,14 +32,12 @@ import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
-    private lateinit var swipeRefresh: SwipeRefreshLayout
 
     // متغيرات صفحة الخطأ الجديدة
     private lateinit var layoutError: View
@@ -115,7 +113,6 @@ class MainActivity : AppCompatActivity() {
         // تعريف العناصر
         webView = findViewById(R.id.webView)
         progressBar = findViewById(R.id.progressBar)
-        swipeRefresh = findViewById(R.id.swipeRefresh)
         layoutError = findViewById(R.id.layoutError)
         btnRetry = findViewById(R.id.btnRetry)
         tvAppName = findViewById(R.id.tvAppName)
@@ -129,9 +126,6 @@ class MainActivity : AppCompatActivity() {
         setupWebViewSettings()
         setupWebChromeClient()
         setupWebViewClient()
-
-        // إعداد السحب للتحديث
-        setupSwipeRefresh()
 
         // إخفاء WebView حتى يتم التحميل الكامل (لإظهار splash بدلاً من صفحة بيضاء)
         webView.visibility = View.INVISIBLE
@@ -223,21 +217,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 notificationManager.createNotificationChannel(channel)
             }
-        }
-    }
-
-    /**
-     * إعداد السحب للتحديث (Pull to Refresh)
-     */
-    private fun setupSwipeRefresh() {
-        swipeRefresh.setColorSchemeColors(
-            Color.parseColor("#64B5F6"),
-            Color.parseColor("#42A5F5"),
-            Color.parseColor("#2196F3")
-        )
-        swipeRefresh.setProgressBackgroundColorSchemeColor(Color.parseColor("#1A1A1A"))
-        swipeRefresh.setOnRefreshListener {
-            webView.reload()
         }
     }
 
@@ -478,7 +457,6 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                swipeRefresh.isRefreshing = false
                 if (isErrorOccurred) {
                     return
                 }
@@ -586,7 +564,6 @@ class MainActivity : AppCompatActivity() {
         webView.visibility = View.GONE
         layoutError.visibility = View.VISIBLE
         progressBar.visibility = View.GONE
-        swipeRefresh.isRefreshing = false
     }
 
     private fun sendFcmTokenToWeb(view: WebView?) {
