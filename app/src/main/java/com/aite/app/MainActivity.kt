@@ -60,6 +60,10 @@ class MainActivity : AppCompatActivity() {
     // علامة لتتبع أول تحميل ناجح
     private var isFirstLoadComplete = false
 
+    // تتبع ما إذا كان التطبيق قد فُتح من إشعار (لتعليمه كمقروء)
+    private var pendingNotificationMarkRead = false
+    private var pendingNotificationContactId: String? = null
+
     // أنيميشن شريط التقدم
     private var progressAnimator: ObjectAnimator? = null
 
@@ -366,6 +370,18 @@ class MainActivity : AppCompatActivity() {
         
         if (!targetUrl.isNullOrEmpty()) {
             if (isSafeUrl(targetUrl)) {
+                // تفعيل علامة تعليم الإشعارات كمقروءة بعد تحميل الصفحة
+                pendingNotificationMarkRead = true
+
+                // استخراج معرف جهة الاتصال من رابط المحادثة لتصفير عداد الرسائل
+                try {
+                    val uri = Uri.parse(targetUrl)
+                    val contactId = uri.getQueryParameter("id") ?: uri.getQueryParameter("contactId")
+                    if (!contactId.isNullOrEmpty()) {
+                        pendingNotificationContactId = contactId
+                    }
+                } catch (_: Exception) {}
+
                 webView.loadUrl(targetUrl)
                 return true
             }
@@ -573,6 +589,12 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 sendFcmTokenToWeb(view)
+
+                // إذا فُتح التطبيق من إشعار، اجعل الإشعارات مقروءة
+                if (pendingNotificationMarkRead) {
+                    pendingNotificationMarkRead = false
+                    markNotificationsAsRead(view)
+                }
             }
             
             // إضافة أمان إضافي للتأكد من أن الروابط الخارجية لا تخرج عن السيطرة
@@ -666,5 +688,41 @@ class MainActivity : AppCompatActivity() {
                 view?.evaluateJavascript("if(window.receiveAndroidToken) { window.receiveAndroidToken('$token'); }", null)
             }
         }
+    }
+
+    /**
+     * تعليم جميع الإشعارات كمقروءة عند فتح التطبيق من إشعار
+     * يتعامل مع الإشعارات العادية وإشعارات الرسائل
+     */
+    private fun markNotificationsAsRead(view: WebView?) {
+        // 1. تعليم كل الإشعارات العادية كمقروءة
+        val markAllReadJS = """(function() {
+            fetch('/api/notifications/mark_read', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            }).catch(function(){});
+        })();""".trimIndent()
+        view?.evaluateJavascript(markAllReadJS, null)
+
+        // 2. إذا كان الإشعار من محادثة، صفّر عداد الرسائل غير المقروءة أيضاً
+        val contactId = pendingNotificationContactId
+        if (!contactId.isNullOrEmpty()) {
+            val markChatReadJS = """(function() {
+                fetch('/api/mark_read', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ other_id: '$contactId' })
+                }).catch(function(){});
+            })();""".trimIndent()
+            view?.evaluateJavascript(markChatReadJS, null)
+            pendingNotificationContactId = null
+        }
+
+        // 3. مسح شارة الإشعارات من أيقونة التطبيق
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancelAll()
     }
 }
