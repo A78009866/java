@@ -36,6 +36,15 @@ import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        // تتبع حالة التطبيق للإشعارات الذكية
+        @Volatile
+        var isAppInForeground = false
+
+        @Volatile
+        var currentVisibleUrl: String? = null
+    }
+
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
 
@@ -62,8 +71,19 @@ class MainActivity : AppCompatActivity() {
     private val ALLOWED_HOST = "aite-lite.vercel.app"
 
     private val fileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            fileUploadCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data))
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            val data = result.data
+            // دعم اختيار ملفات متعددة
+            val clipData = data?.clipData
+            if (clipData != null) {
+                // تم اختيار ملفات متعددة
+                val uris = Array(clipData.itemCount) { i -> clipData.getItemAt(i).uri }
+                fileUploadCallback?.onReceiveValue(uris)
+            } else {
+                // ملف واحد
+                val uris = WebChromeClient.FileChooserParams.parseResult(result.resultCode, data)
+                fileUploadCallback?.onReceiveValue(uris)
+            }
         } else {
             fileUploadCallback?.onReceiveValue(null)
         }
@@ -77,6 +97,11 @@ class MainActivity : AppCompatActivity() {
             webPermissionRequest?.deny()
         }
         webPermissionRequest = null
+    }
+
+    // طلب أذونات الكاميرا والتخزين
+    private val mediaPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+        // الأذونات ستكون متاحة عند الحاجة
     }
 
     // طلب إذن الإشعارات تلقائياً
@@ -130,9 +155,9 @@ class MainActivity : AppCompatActivity() {
         // إخفاء WebView حتى يتم التحميل الكامل (لإظهار splash بدلاً من صفحة بيضاء)
         webView.visibility = View.INVISIBLE
 
-        // تحميل الصفحة فوراً
-        handleNotificationIntent(intent)
-        if (webView.url == null) {
+        // تحميل الصفحة: إذا جاء من إشعار حمّل رابط الإشعار، وإلا حمّل الرئيسية
+        val handledByNotification = handleNotificationIntent(intent)
+        if (!handledByNotification) {
             webView.loadUrl("https://$ALLOWED_HOST")
         }
 
@@ -167,7 +192,20 @@ class MainActivity : AppCompatActivity() {
 
             // طلب إذن الإشعارات تلقائياً عند كل تشغيل
             requestNotificationPermission()
+            requestMediaPermissions()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isAppInForeground = true
+        currentVisibleUrl = if (::webView.isInitialized) webView.url else null
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isAppInForeground = false
+        currentVisibleUrl = null
     }
 
     /**
@@ -178,6 +216,34 @@ class MainActivity : AppCompatActivity() {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+    }
+
+    /**
+     * طلب أذونات الكاميرا والتخزين لدعم رفع الملفات بدون حدود
+     */
+    private fun requestMediaPermissions() {
+        val permissionsNeeded = mutableListOf<String>()
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.CAMERA)
+        }
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.READ_MEDIA_IMAGES)
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.READ_MEDIA_VIDEO)
+            }
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+        }
+
+        if (permissionsNeeded.isNotEmpty()) {
+            mediaPermissionLauncher.launch(permissionsNeeded.toTypedArray())
         }
     }
 
@@ -292,24 +358,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * دالة الأمان المصححة: تتحقق من الرابط قبل تحميله
-     * هذا يحل مشكلة Cross-App Scripting
+     * معالجة الإشعار: تحميل الرابط المستهدف من الإشعار
+     * ترجع true إذا تم تحميل رابط بنجاح، false إذا لم يكن هناك رابط
      */
-    private fun handleNotificationIntent(intent: Intent?) {
+    private fun handleNotificationIntent(intent: Intent?): Boolean {
         val targetUrl = intent?.getStringExtra("TARGET_URL")
         
         if (!targetUrl.isNullOrEmpty()) {
-            // التحقق مما إذا كان الرابط آمناً وينتمي لنطاق تطبيقك
             if (isSafeUrl(targetUrl)) {
                 webView.loadUrl(targetUrl)
-            } else {
-                // إذا كان الرابط مشبوهاً، قم بتحميل الصفحة الرئيسية بدلاً منه
-                // أو تجاهله تماماً للحماية
-                if (webView.url == null) {
-                    webView.loadUrl("https://$ALLOWED_HOST")
-                }
+                return true
             }
         }
+        return false
     }
 
     /**
@@ -350,17 +411,17 @@ class MainActivity : AppCompatActivity() {
         settings.mediaPlaybackRequiresUserGesture = false
         
         // تحسينات الأمان
-        settings.allowFileAccess = false 
+        settings.allowFileAccess = true
         settings.allowContentAccess = true
         
         // تحسينات الأداء والتخزين المؤقت
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-        settings.setGeolocationEnabled(false)
+        settings.setGeolocationEnabled(true)
         
         // إعدادات لمظهر أصلي
         settings.setSupportMultipleWindows(false)
-        settings.javaScriptCanOpenWindowsAutomatically = false
+        settings.javaScriptCanOpenWindowsAutomatically = true
         settings.setNeedInitialFocus(false)
 
         CookieManager.getInstance().setAcceptCookie(true)
@@ -428,15 +489,44 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
+                // إلغاء أي callback سابق لم يكتمل
+                fileUploadCallback?.onReceiveValue(null)
                 fileUploadCallback = filePathCallback
-                val intent = fileChooserParams?.createIntent()
+
                 try {
-                    fileChooserLauncher.launch(intent)
+                    val intent = fileChooserParams?.createIntent()
+                    if (intent != null) {
+                        // دعم اختيار ملفات متعددة (مثل الويب)
+                        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+
+                        // السماح باختيار جميع أنواع الملفات
+                        val acceptTypes = fileChooserParams?.acceptTypes
+                        if (acceptTypes != null && acceptTypes.size > 1) {
+                            intent.type = "*/*"
+                            intent.putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes)
+                        }
+
+                        fileChooserLauncher.launch(intent)
+                    } else {
+                        // إنشاء intent يدوي إذا فشل createIntent
+                        val fallbackIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "*/*"
+                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        }
+                        fileChooserLauncher.launch(fallbackIntent)
+                    }
                 } catch (e: Exception) {
+                    fileUploadCallback?.onReceiveValue(null)
                     fileUploadCallback = null
                     return false
                 }
                 return true
+            }
+
+            // دعم تحديد الموقع الجغرافي
+            override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
+                callback?.invoke(origin, true, false)
             }
         }
     }
@@ -460,6 +550,9 @@ class MainActivity : AppCompatActivity() {
                 if (isErrorOccurred) {
                     return
                 }
+
+                // تحديث الرابط الحالي للإشعارات الذكية
+                currentVisibleUrl = url
 
                 // حقن CSS و JS شامل لإزالة جميع علامات الويب
                 injectNativeStyles(view)

@@ -59,12 +59,12 @@
         <!-- أيقونة الإشعار الافتراضية لـ Firebase عندما يكون التطبيق في الخلفية -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@mipmap/ic_launcher" />
+            android:resource="@drawable/ic_notification" />
 
         <!-- لون الإشعار الافتراضي -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
-            android:resource="@android:color/white" />
+            android:resource="@color/notification_color" />
 
     </application>
 

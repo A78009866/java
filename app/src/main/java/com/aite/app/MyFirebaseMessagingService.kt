@@ -27,7 +27,61 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val body = remoteMessage.data["body"] ?: remoteMessage.notification?.body ?: ""
         val targetUrl = remoteMessage.data["url"]
 
-        showNotification(title, body, targetUrl)
+        // إشعارات ذكية: لا تعرض إشعار إذا كان المستخدم يشاهد نفس المحادثة
+        if (shouldShowNotification(targetUrl)) {
+            showNotification(title, body, targetUrl)
+        }
+    }
+
+    /**
+     * تحقق ذكي: هل يجب عرض الإشعار؟
+     * لا يتم عرض الإشعار إذا كان التطبيق في المقدمة والمستخدم يشاهد نفس الصفحة/المحادثة
+     */
+    private fun shouldShowNotification(targetUrl: String?): Boolean {
+        // إذا كان التطبيق ليس في المقدمة، اعرض الإشعار دائماً
+        if (!MainActivity.isAppInForeground) {
+            return true
+        }
+
+        // إذا لا يوجد رابط مستهدف، اعرض الإشعار
+        if (targetUrl.isNullOrEmpty()) {
+            return true
+        }
+
+        val currentUrl = MainActivity.currentVisibleUrl
+        // إذا لا يوجد رابط حالي، اعرض الإشعار
+        if (currentUrl.isNullOrEmpty()) {
+            return true
+        }
+
+        // مقارنة ذكية: استخراج مسار المحادثة من الرابط
+        try {
+            val targetUri = android.net.Uri.parse(targetUrl)
+            val currentUri = android.net.Uri.parse(currentUrl)
+
+            val targetPath = targetUri.path ?: ""
+            val currentPath = currentUri.path ?: ""
+
+            // إذا كان المسار متطابق (نفس المحادثة/الصفحة)، لا تعرض الإشعار
+            if (targetPath.isNotEmpty() && targetPath == currentPath) {
+                return false
+            }
+
+            // مقارنة إضافية بالمعرفات: إذا كان كلا المسارين يحتويان على نفس معرف المحادثة
+            val targetSegments = targetPath.split("/").filter { it.isNotEmpty() }
+            val currentSegments = currentPath.split("/").filter { it.isNotEmpty() }
+
+            // إذا كان كلاهما يشير لنفس القسم ونفس المعرف
+            if (targetSegments.size >= 2 && currentSegments.size >= 2) {
+                if (targetSegments.last() == currentSegments.last()) {
+                    return false
+                }
+            }
+        } catch (_: Exception) {
+            // في حالة خطأ في التحليل، اعرض الإشعار
+        }
+
+        return true
     }
 
     private fun showNotification(title: String, body: String, url: String?) {
@@ -79,8 +133,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val largeIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
 
         val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setLargeIcon(largeIcon)
+            .setColor(android.graphics.Color.parseColor("#3982f7"))
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
